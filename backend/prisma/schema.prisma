@@ -1,0 +1,101 @@
+// Berberim - cok kiracili (multi-tenant) berber platformu.
+// KURAL: Dukkana ait her tablo shopId tasir; her sorgu shopId ile filtrelenir.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  // Gelistirme: prisma/dev.db. Canliya cikarken provider = "postgresql" ve url = env("DATABASE_URL").
+  url      = "file:./dev.db"
+}
+
+model Shop {
+  id           Int      @id @default(autoincrement())
+  slug         String   @unique
+  name         String
+  phone        String   @default("")
+  whatsapp     String   @default("")
+  address      String   @default("")
+  city         String   @default("")
+  about        String   @default("")
+  logo         String   @default("") // data URL ya da adres
+  primaryColor String   @default("#c9a24b")
+  accentColor  String   @default("#111111")
+  slotMinutes  Int      @default(30)
+  status       String   @default("TRIAL") // TRIAL | ACTIVE | SUSPENDED
+  plan         String   @default("BASIC")
+  trialEndsAt  DateTime
+  paidUntil    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users        User[]
+  services     Service[]
+  hours        WorkingHour[]
+  appointments Appointment[]
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   // PLATFORM_ADMIN | OWNER | STAFF
+  shopId       Int?
+  shop         Shop?    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@index([shopId])
+}
+
+model Service {
+  id              Int      @id @default(autoincrement())
+  shopId          Int
+  shop            Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name            String
+  description     String   @default("")
+  price           Int      // TL
+  durationMinutes Int      @default(30)
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  appointments    Appointment[]
+
+  @@index([shopId])
+}
+
+model WorkingHour {
+  id        Int     @id @default(autoincrement())
+  shopId    Int
+  shop      Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  dayOfWeek Int     // 0 = Pazartesi ... 6 = Pazar
+  isOpen    Boolean @default(true)
+  openTime  String  @default("09:00")
+  closeTime String  @default("20:00")
+
+  @@unique([shopId, dayOfWeek])
+}
+
+model Appointment {
+  id            Int      @id @default(autoincrement())
+  shopId        Int
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  serviceId     Int
+  service       Service  @relation(fields: [serviceId], references: [id])
+  serviceName   String
+  price         Int
+  customerName  String
+  customerPhone String
+  note          String   @default("")
+  date          String   // YYYY-MM-DD (dukkan yerel saati)
+  startMinutes  Int      // gun icindeki dakika (09:30 = 570)
+  endMinutes    Int
+  status        String   @default("PENDING") // PENDING | CONFIRMED | COMPLETED | CANCELLED | NO_SHOW
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([shopId, date])
+}
