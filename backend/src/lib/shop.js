@@ -59,11 +59,15 @@ function ownerShop(shop) {
     paidUntil: shop.paidUntil,
     acceptingBookings: access.open,
     accessReason: access.reason,
+    confirmMode: shop.confirmMode,
+    isDemo: Boolean(shop.isDemo),
   };
 }
 
 function publicUser(user) {
-  return { id: user.id, email: user.email, name: user.name, role: user.role, shopId: user.shopId };
+  return {
+    id: user.id, email: user.email, name: user.name, role: user.role, shopId: user.shopId, barberId: user.barberId ?? null,
+  };
 }
 
 function formatAppointment(a) {
@@ -71,6 +75,8 @@ function formatAppointment(a) {
     id: a.id,
     serviceId: a.serviceId,
     serviceName: a.serviceName,
+    barberId: a.barberId ?? null,
+    barberName: a.barberName || "",
     price: a.price,
     customerName: a.customerName,
     customerPhone: a.customerPhone,
@@ -79,6 +85,9 @@ function formatAppointment(a) {
     start: fromMinutes(a.startMinutes),
     end: fromMinutes(a.endMinutes),
     status: a.status,
+    decidedBy: a.decidedBy || "",
+    cancelledBy: a.cancelledBy || "",
+    loyaltyReward: Boolean(a.loyaltyReward),
     createdAt: a.createdAt,
   };
 }

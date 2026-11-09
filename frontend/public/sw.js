@@ -1,5 +1,5 @@
-// Berberim service worker: uygulama kabugunu onbellekler, API'yi asla onbelleklemez.
-const CACHE = "berberim-v1";
+// BERBERIX service worker: uygulama kabugunu onbellekler, API'yi asla onbelleklemez.
+const CACHE = "berberix-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icons/icon-192.png"])));

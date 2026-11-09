@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth.jsx";
+import { Wordmark } from "../components/Icon.jsx";
 
 export default function Login() {
   const { signIn } = useAuth();
@@ -28,7 +29,7 @@ export default function Login() {
   return (
     <div className="auth-page">
       <form className="card auth-card" onSubmit={submit}>
-        <Link to="/" className="brand">✂ Berberim</Link>
+        <Link to="/" className="brand"><Wordmark /></Link>
         <h2>Giriş yap</h2>
         <label>E-posta<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required autoComplete="email" /></label>
         <label>Şifre<input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required autoComplete="current-password" /></label>

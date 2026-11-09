@@ -36,6 +36,9 @@ router.post("/register-shop", limiter, async (req, res, next) => {
     if (ownerName.length < 2) throw new HttpError(400, "Adınızı yazın.");
     if (!isEmail(email)) throw new HttpError(400, "Geçerli bir e-posta yazın.");
     if (password.length < 8) throw new HttpError(400, "Şifre en az 8 karakter olmalı.");
+    if (req.body.acceptTerms !== true) {
+      throw new HttpError(400, "Devam etmek için Kullanım Koşulları ve Aydınlatma Metni'ni kabul et.");
+    }
     if (slug.length < 3 || RESERVED_SLUGS.has(slug)) {
       throw new HttpError(400, "Bu dükkan adresi kullanılamaz. Başka bir adres seçin.");
     }
@@ -51,7 +54,7 @@ router.post("/register-shop", limiter, async (req, res, next) => {
 
     const { shop, user } = await db().$transaction(async (tx) => {
       const created = await tx.shop.create({
-        data: { slug, name: shopName, phone, whatsapp: phone, trialEndsAt },
+        data: { slug, name: shopName, phone, whatsapp: phone, trialEndsAt, termsAcceptedAt: new Date() },
       });
       const owner = await tx.user.create({
         data: { email, passwordHash, name: ownerName, role: "OWNER", shopId: created.id },
@@ -74,6 +77,19 @@ router.post("/register-shop", limiter, async (req, res, next) => {
   }
 });
 
+// Satis demosu: ziyaretci sifresiz olarak demo dukkanin paneline girer.
+router.post("/demo", rateLimit({ windowMs: 60 * 60 * 1000, max: 30 }), async (req, res, next) => {
+  try {
+    const shop = await db().shop.findFirst({ where: { isDemo: true } });
+    if (!shop) throw new HttpError(404, "Demo şu an hazır değil.");
+    const user = await db().user.findFirst({ where: { shopId: shop.id, role: "OWNER" } });
+    if (!user) throw new HttpError(404, "Demo şu an hazır değil.");
+    res.json({ success: true, data: { token: signToken(user), user: publicUser(user), shop: ownerShop(shop) } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/login", limiter, async (req, res, next) => {
   try {
     const email = cleanText(req.body.email, 120).toLowerCase();
@@ -86,6 +102,24 @@ router.post("/login", limiter, async (req, res, next) => {
       success: true,
       data: { token: signToken(user), user: publicUser(user), shop: shop ? ownerShop(shop) : null },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Sifre degistirme (sahip, calisan, yonetici)
+router.post("/password", requireAuth, limiter, async (req, res, next) => {
+  try {
+    const current = String(req.body.currentPassword || "");
+    const next_ = String(req.body.newPassword || "");
+    if (!(await bcrypt.compare(current, req.user.passwordHash))) throw new HttpError(400, "Mevcut şifre hatalı.");
+    const min = req.user.role === "PLATFORM_ADMIN" ? 10 : 8;
+    if (next_.length < min) throw new HttpError(400, `Yeni şifre en az ${min} karakter olmalı.`);
+    if (next_ === current) throw new HttpError(400, "Yeni şifre eskisiyle aynı olamaz.");
+    const shop = req.user.shopId ? await db().shop.findUnique({ where: { id: req.user.shopId } }) : null;
+    if (shop && shop.isDemo) throw new HttpError(403, "Demo hesabın şifresi değiştirilemez.");
+    await db().user.update({ where: { id: req.user.id }, data: { passwordHash: await bcrypt.hash(next_, 10) } });
+    res.json({ success: true, data: { changed: true } });
   } catch (error) {
     next(error);
   }

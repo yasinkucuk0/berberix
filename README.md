@@ -1,4 +1,4 @@
-# Berberim
+# BERBERİX
 
 Berberler için çok kiracılı (multi-tenant) randevu platformu. Her berber kendi
 markasıyla (ad, logo, renk, hizmet, fiyat, saat) dükkan sayfasını oluşturur;
@@ -29,9 +29,12 @@ cd frontend  && npm install && npm run dev                            # http://l
 | `/` | Platform tanıtımı |
 | `/kayit` | Berber dükkanını/markasını oluşturur (14 gün deneme) |
 | `/giris` | Giriş |
-| `/panel` | Dükkan paneli: randevular, hizmetler, saatler, marka, paylaş |
+| `/panel` | Dükkan paneli: Randevu, Müşteri (CRM), Kasa, Asistan (karar motoru), Ayarlar (hizmet, çalışanlar, saat, marka, paylaş) |
 | `/yonetim` | Platform yöneticisi: dükkanlar, ödeme/deneme, askıya alma |
-| `/<slug>` | Müşterinin gördüğü dükkan sayfası + randevu |
+| `/r/<token>` | Müşterinin randevusunu görüp iptal ettiği sayfa |
+| `/kvkk`, `/kosullar` | KVKK Aydınlatma Metni, Kullanım Koşulları |
+| `/demo-berber` | Satış demosu (yönetimden kurulur; ana sayfada "Paneli dene") |
+| `/<slug>` | Müşterinin gördüğü dükkan sayfası + randevu (KVKK onayı zorunlu) |
 
 ## API
 
@@ -39,6 +42,28 @@ cd frontend  && npm install && npm run dev                            # http://l
 - `GET /api/public/shops/:slug`, `GET .../availability?date&serviceId`, `POST .../appointments`
 - `GET|PATCH /api/shop`, `/api/shop/services`, `/api/shop/hours`, `/api/shop/appointments`, `/api/shop/stats`
 - `GET /api/admin/shops`, `PATCH /api/admin/shops/:id`, `POST /api/admin/setup`
+- Demo ve KVKK: `POST /api/auth/demo`, `POST /api/admin/demo/reset`, `PUT /api/shop/customers/:key/consent { marketingConsent: false }`;
+  randevu gövdesinde `kvkk: true` zorunlu, `marketingConsent` isteğe bağlı; kayıtta `acceptTerms: true` zorunlu
+- Satış ayarları (fiyat, WhatsApp, yasal ad): `frontend/src/config/brand.js`
+- Müşteri iptal linki: `/r/<token>` sayfası; `GET /api/public/appointments/:token`, `POST /api/public/appointments/:token/cancel`
+- Kapalı günler: `GET|POST /api/shop/closed-days`, `DELETE /api/shop/closed-days/:id`; öğle arası: `PUT /api/shop/hours` (`breakStart`, `breakEnd`)
+- Sadakat: `PATCH /api/shop/decisions/settings { loyaltyEvery }` (0 = kapalı)
+- Çalışan girişi: `PUT|DELETE /api/shop/barbers/:id/login { email, password }`; çalışan (STAFF) sadece kendi randevularını görür.
+  Şifre: `POST /api/auth/password { currentPassword, newPassword }`. Paket: `PATCH /api/admin/shops/:id { plan: BASIC|PRO|SALON }`
+- Karar motoru: `GET /api/shop/decisions/insights`, `GET|PATCH /api/shop/decisions/settings`,
+  `GET /api/shop/decisions/log`, `GET /api/shop/customers/profile?phone=`
+- Müşteriler: `GET /api/shop/customers?q=&segment=`, `GET /api/shop/customers/:key`, `PUT /api/shop/customers/:key/note`
+- Çalışanlar: `GET|POST /api/shop/barbers`, `PATCH /api/shop/barbers/:id` (ad, ünvan, izinli günler, aktif/pasif);
+  randevuda `barberId` (müşteri sayfasında `any` = fark etmez → karar motoru atar), `GET /api/shop/appointments?barberId=`,
+  `PATCH /api/shop/appointments/:id { barberId }` ile aktarma
+- Kasa: `GET /api/shop/cash?date=` (gün içi `byBarber` kırılımı dahil), `GET /api/shop/cash/report?from&to`, `POST /api/shop/cash`, `DELETE /api/shop/cash/:id`, `GET /api/shop/cash/meta`
+  (randevu `PATCH .../appointments/:id { status: "COMPLETED", paymentMethod }` kasaya otomatik gelir yazar)
+
+## Karar mimarisi
+
+Randevu onay/red, müşteri riski, dükkan önerileri ve platform kararları tek bir açıklanabilir
+kural motorunda (`backend/src/decisions/`). Ayrıntı ve teknik karar kayıtları (ADR):
+[docs/KARAR-MIMARISI.md](docs/KARAR-MIMARISI.md)
 
 ## GELİŞTİRME KURALLARI (UMAY dahil herkes için)
 
@@ -49,6 +74,7 @@ cd frontend  && npm install && npm run dev                            # http://l
 3. Yeni rota → `backend/src/routes/` + `src/app.js`'e bağla + `backend/test/` içine test.
 4. Fiyatlar tam sayı TL. Tarih `YYYY-MM-DD`, saat gün içi dakika (`startMinutes`).
 5. Şifre özeti, token, `.env` asla yanıtta/logda gösterilmez.
+6. **Karar mimarisi:** İş kararları sadece `backend/src/decisions/` içinde; rotalar karar vermez.
 
 ## Canlıya çıkış (sonra)
 

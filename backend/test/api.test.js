@@ -20,6 +20,9 @@ test.before(async () => {
 test.after(() => server.close());
 
 async function call(method, path, body, token) {
+  // Formlardaki zorunlu onay kutulari (KVKK / kullanim kosullari) testlerde varsayilan olarak isaretli
+  if (body && /\/public\/shops\/[^/]+\/appointments$/.test(path) && body.kvkk === undefined) body = { ...body, kvkk: true };
+  if (body && path === "/auth/register-shop" && body.acceptTerms === undefined) body = { ...body, acceptTerms: true };
   const res = await fetch(base + path, {
     method,
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -185,4 +188,35 @@ test("deneme suresi biten dukkan randevu almaz", async () => {
   const me = await call("GET", "/shop", null, ctx.a);
   assert.equal(me.body.data.acceptingBookings, false);
   assert.match(me.body.data.accessReason, /Deneme/);
+});
+
+test("berber elle randevu ekler; cakisma ve baska dukkan hizmeti reddedilir", async () => {
+  const login = await call("POST", "/auth/login", { email: "mehmet@test.com", password: "gizli1234" });
+  const token = login.body.data.token;
+  const services = await call("GET", "/shop/services", null, token);
+  const svc = services.body.data[0];
+  const date = nextOpenDate();
+  const r = await call("POST", "/shop/appointments", {
+    serviceId: svc.id, date, time: "21:30", customerName: "Telefon Müşterisi", customerPhone: "05321112233",
+  }, token);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.data.status, "CONFIRMED"); // calisma saati disi elle eklenebilir
+  const clash = await call("POST", "/shop/appointments", {
+    serviceId: svc.id, date, time: "21:40", customerName: "Başka", customerPhone: "",
+  }, token);
+  assert.equal(clash.status, 409);
+  const aSvc = (await call("GET", "/shop/services", null, ctx.a)).body.data[0];
+  const foreign = await call("POST", "/shop/appointments", {
+    serviceId: aSvc.id, date, time: "08:00", customerName: "Hile", customerPhone: "",
+  }, token);
+  assert.equal(foreign.status, 404);
+});
+
+test("canli kurulum anahtari: yanlis anahtar reddedilir", async () => {
+  process.env.ADMIN_SETUP_TOKEN = "x".repeat(32);
+  const status = await call("GET", "/admin/setup-status");
+  assert.equal(status.body.data.needsToken, true);
+  const bad = await call("POST", "/admin/setup", { email: "z@test.com", password: "yonetici12345", setupToken: "yanlis" });
+  assert.equal(bad.status, 403);
+  delete process.env.ADMIN_SETUP_TOKEN;
 });

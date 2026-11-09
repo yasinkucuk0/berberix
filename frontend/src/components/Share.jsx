@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../lib/auth.jsx";
+import Icon from "./Icon.jsx";
 
 export default function Share() {
   const { shop } = useAuth();
@@ -24,22 +25,22 @@ export default function Share() {
 
   return (
     <section className="card share">
-      <h3>Dükkan sayfan hazır 🎉</h3>
+      <h3>Dükkan sayfan hazır</h3>
       <p className="muted">Bu linki müşterilerine gönder, Instagram profiline ve Google işletme sayfana ekle.</p>
       <div className="share-url">{url}</div>
       <div className="row">
-        <button className="btn" onClick={copy}>{copied ? "Kopyalandı ✓" : "Linki kopyala"}</button>
-        <button className="btn btn-ghost" onClick={share}>Paylaş</button>
+        <button className="btn" onClick={copy}><Icon name={copied ? "check" : "copy"} />{copied ? "Kopyalandı" : "Linki kopyala"}</button>
+        <button className="btn btn-ghost" onClick={share}><Icon name="share" />Paylaş</button>
         <a className="btn btn-ghost" href={`/${shop.slug}`} target="_blank" rel="noreferrer">Sayfamı aç</a>
       </div>
       <a className="btn btn-block wa" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noreferrer">
-        WhatsApp'ta paylaş
+        <Icon name="message" />WhatsApp'ta paylaş
       </a>
       <h4>Telefona uygulama olarak ekle</h4>
       <ol className="tiny muted">
         <li>Bu paneli telefonun tarayıcısında aç.</li>
-        <li>Android (Chrome): menü ⋮ → <b>Ana ekrana ekle / Uygulamayı yükle</b>.</li>
-        <li>iPhone (Safari): Paylaş ⬆ → <b>Ana Ekrana Ekle</b>.</li>
+        <li>Android (Chrome): sağ üstteki menü › <b>Uygulamayı yükle</b>.</li>
+        <li>iPhone (Safari): Paylaş düğmesi › <b>Ana Ekrana Ekle</b>.</li>
       </ol>
     </section>
   );

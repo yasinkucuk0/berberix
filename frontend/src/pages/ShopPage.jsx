@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api, dateLabel, inkFor, money, todayStr, waLink } from "../lib/api";
+import Icon, { Wordmark } from "../components/Icon.jsx";
+
+const Step = ({ n, children }) => <h3 className="step-title"><span className="step-no">{n}</span>{children}</h3>;
 
 export default function ShopPage() {
   const { slug } = useParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [service, setService] = useState(null);
+  const [barber, setBarber] = useState("any"); // "any" = fark etmez
   const [date, setDate] = useState(todayStr());
   const [slots, setSlots] = useState(null);
   const [time, setTime] = useState("");
-  const [form, setForm] = useState({ customerName: "", customerPhone: "", note: "" });
+  const [form, setForm] = useState({ customerName: "", customerPhone: "", note: "", kvkk: false, marketingConsent: false });
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
   const [formError, setFormError] = useState("");
@@ -28,17 +32,21 @@ export default function ShopPage() {
     if (!service) return;
     setSlots(null);
     setTime("");
-    api(`/public/shops/${slug}/availability?date=${date}&serviceId=${service.id}`, { auth: false })
+    setFormError("");
+    const who = barber === "any" ? "" : `&barberId=${barber}`;
+    api(`/public/shops/${slug}/availability?date=${date}&serviceId=${service.id}${who}`, { auth: false })
       .then((d) => setSlots(d.slots))
       .catch((e) => { setSlots([]); setFormError(e.message); });
-  }, [slug, service, date]);
+  }, [slug, service, date, barber]);
 
   const days = useMemo(() => Array.from({ length: 14 }, (_, i) => todayStr(i)), []);
 
-  if (error) return <div className="center shop-missing"><h2>😕</h2><p>{error}</p></div>;
+  if (error) return <div className="center shop-missing"><h2>Sayfa bulunamadı</h2><p className="muted">{error}</p><a className="link" href="/">Ana sayfaya dön</a></div>;
   if (!data) return <div className="center muted">Yükleniyor…</div>;
 
   const { shop, services, hours, acceptingBookings } = data;
+  const barbers = data.barbers || [];
+  const step = (n) => (barbers.length ? n + 1 : n);
   const style = { "--brand": shop.primaryColor, "--brand-ink": inkFor(shop.primaryColor), "--shop-bg": shop.accentColor };
 
   const book = async (e) => {
@@ -47,7 +55,7 @@ export default function ShopPage() {
     setBusy(true);
     try {
       const result = await api(`/public/shops/${slug}/appointments`, {
-        method: "POST", auth: false, body: { serviceId: service.id, date, time, ...form },
+        method: "POST", auth: false, body: { serviceId: service.id, date, time, barberId: barber, ...form },
       });
       setDone(result);
     } catch (err) {
@@ -58,13 +66,31 @@ export default function ShopPage() {
   };
 
   if (done) {
-    const msg = `Merhaba, ${dateLabel(done.date)} saat ${done.time} için ${done.serviceName} randevusu aldım. Adım: ${form.customerName}`;
+    const msg = `Merhaba, ${dateLabel(done.date)} saat ${done.time} için ${done.serviceName} randevusu aldım${done.barberName ? ` (${done.barberName})` : ""}. Adım: ${form.customerName}`;
     return (
       <div className="shop" style={style}>
         <div className="card done">
-          <h2>Randevun alındı ✓</h2>
-          <p><b>{done.serviceName}</b><br />{dateLabel(done.date)} • {done.time}<br />{money(done.price)}</p>
-          {shop.whatsapp && <a className="btn btn-block wa" href={waLink(shop.whatsapp, msg)} target="_blank" rel="noreferrer">Berbere WhatsApp'tan bildir</a>}
+          <div className={done.status === "CONFIRMED" ? "done-mark" : "done-mark wait"}>
+            <Icon name={done.status === "CONFIRMED" ? "check" : "clock"} stroke={2} />
+          </div>
+          <h2>{done.status === "CONFIRMED" ? "Randevun onaylandı" : "İsteğin alındı"}</h2>
+          {done.message && <p className="muted">{done.message}</p>}
+          <div className="done-detail">
+            <b>{done.serviceName}</b><br />{dateLabel(done.date)} · {done.time}
+            {done.barberName && <><br />Berberin: {done.barberName}</>}<br />{done.loyalty?.reward ? "Hediye" : money(done.price)}
+          </div>
+          {done.loyalty?.message && (
+            <p className={done.loyalty.reward ? "gold inline-meta" : "tiny muted inline-meta"} style={{ justifyContent: "center" }}>
+              <Icon name="star" />{done.loyalty.message}
+            </p>
+          )}
+          {done.manageToken && (
+            <p className="tiny muted">
+              Planın değişirse <a className="link" href={`/r/${done.manageToken}`}>randevunu buradan iptal edebilirsin</a>.
+              Bu sayfayı yer imlerine ekle ya da linki sakla.
+            </p>
+          )}
+          {shop.whatsapp && <a className="btn btn-block wa" href={waLink(shop.whatsapp, msg)} target="_blank" rel="noreferrer"><Icon name="message" />Berbere WhatsApp'tan yaz</a>}
           <button className="btn btn-ghost btn-block" onClick={() => { setDone(null); setService(null); }}>Yeni randevu</button>
         </div>
       </div>
@@ -74,35 +100,51 @@ export default function ShopPage() {
   return (
     <div className="shop" style={style}>
       <header className="shop-head">
-        {shop.logo ? <img src={shop.logo} alt={shop.name} className="shop-logo" /> : <div className="shop-logo logo-fallback big">✂</div>}
+        {shop.logo ? <img src={shop.logo} alt={shop.name} className="shop-logo" /> : <div className="shop-logo logo-fallback big"><Icon name="scissors" /></div>}
         <h1>{shop.name}</h1>
         {shop.about && <p className="muted">{shop.about}</p>}
-        <div className="row center-row">
-          {shop.phone && <a className="btn btn-ghost btn-small" href={`tel:${shop.phone}`}>📞 Ara</a>}
-          {shop.whatsapp && <a className="btn btn-ghost btn-small" href={waLink(shop.whatsapp)} target="_blank" rel="noreferrer">💬 WhatsApp</a>}
-          {shop.address && <a className="btn btn-ghost btn-small" href={`https://maps.google.com/?q=${encodeURIComponent(`${shop.address} ${shop.city}`)}`} target="_blank" rel="noreferrer">📍 Yol tarifi</a>}
+        <div className="shop-actions">
+          {shop.phone && <a className="shop-action" href={`tel:${shop.phone}`}><span><Icon name="phone" /></span>Ara</a>}
+          {shop.whatsapp && <a className="shop-action" href={waLink(shop.whatsapp)} target="_blank" rel="noreferrer"><span><Icon name="message" /></span>Mesaj</a>}
+          {shop.address && <a className="shop-action" href={`https://maps.google.com/?q=${encodeURIComponent(`${shop.address} ${shop.city}`)}`} target="_blank" rel="noreferrer"><span><Icon name="pin" /></span>Yol tarifi</a>}
         </div>
       </header>
 
-      {!acceptingBookings && <div className="alert">Bu dükkan şu an online randevu almıyor. Telefonla ulaşabilirsiniz.</div>}
+      {!acceptingBookings && <div className="alert"><Icon name="info" /><span>Bu dükkan şu an online randevu almıyor. Telefonla ulaşabilirsiniz.</span></div>}
 
       <section className="card">
-        <h3>1. Hizmet seç</h3>
+        <Step n={1}>Hizmet seç</Step>
         <ul className="pick-list">
           {services.map((s) => (
             <li key={s.id}>
               <button className={service?.id === s.id ? "pick active" : "pick"} onClick={() => acceptingBookings && setService(s)} disabled={!acceptingBookings}>
-                <span><b>{s.name}</b><small className="muted"> {s.durationMinutes} dk</small>{s.description && <small className="muted block">{s.description}</small>}</span>
-                <b>{money(s.price)}</b>
+                <span><span className="block">{s.name}</span><small className="muted">{s.durationMinutes} dk{s.description ? ` · ${s.description}` : ""}</small></span>
+                <b className="gold">{money(s.price)}</b>
               </button>
             </li>
           ))}
         </ul>
       </section>
 
+      {service && barbers.length > 0 && (
+        <section className="card">
+          <Step n={2}>Berber seç</Step>
+          <div className="barber-pick">
+            <button className={barber === "any" ? "pick active" : "pick"} onClick={() => setBarber("any")}>
+              <span>Fark etmez</span><small className="muted">En erken boş saat</small>
+            </button>
+            {barbers.map((b) => (
+              <button key={b.id} className={barber === String(b.id) ? "pick active" : "pick"} onClick={() => setBarber(String(b.id))}>
+                <span>{b.name}</span>{b.title && <small className="muted">{b.title}</small>}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {service && (
         <section className="card">
-          <h3>2. Gün ve saat</h3>
+          <Step n={step(2)}>Gün ve saat</Step>
           <div className="day-strip">
             {days.map((d) => (
               <button key={d} className={d === date ? "chip active" : "chip"} onClick={() => setDate(d)}>
@@ -122,27 +164,37 @@ export default function ShopPage() {
 
       {service && time && (
         <form className="card form-grid" onSubmit={book}>
-          <h3>3. Bilgilerin</h3>
-          <p className="tiny muted">{service.name} • {dateLabel(date)} {time} • {money(service.price)}</p>
+          <Step n={step(3)}>Bilgilerin</Step>
+          <p className="tiny muted">{service.name} · {dateLabel(date)} {time} · {money(service.price)}</p>
           <label>Adın soyadın<input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} required autoComplete="name" /></label>
           <label>Telefonun<input value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} required inputMode="tel" autoComplete="tel" placeholder="05xx xxx xx xx" /></label>
           <label>Not (isteğe bağlı)<input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
+          <label className="check">
+            <input type="checkbox" checked={form.kvkk} onChange={(e) => setForm({ ...form, kvkk: e.target.checked })} required />
+            <span className="tiny"><a className="link" href="/kvkk" target="_blank" rel="noreferrer">Aydınlatma Metni</a>'ni okudum. Bilgilerim randevu için kullanılacak.</span>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={form.marketingConsent} onChange={(e) => setForm({ ...form, marketingConsent: e.target.checked })} />
+            <span className="tiny muted">İsteğe bağlı: {shop.name}'den kampanya ve hatırlatma mesajı (WhatsApp/SMS) almak istiyorum.</span>
+          </label>
           {formError && <div className="alert">{formError}</div>}
-          <button className="btn btn-block" disabled={busy}>{busy ? "Kaydediliyor…" : "Randevuyu onayla"}</button>
+          <button className="btn btn-block" disabled={busy}>{busy ? "Kaydediliyor…" : "Randevuyu al"}</button>
         </form>
       )}
 
       <section className="card">
-        <h3>Çalışma saatleri</h3>
+        <h3 className="section-title"><Icon name="clock" />Çalışma saatleri</h3>
         <ul className="hours-list">
           {hours.map((h) => (
             <li key={h.dayOfWeek}><span>{h.day}</span><span className="muted">{h.isOpen ? `${h.openTime} – ${h.closeTime}` : "Kapalı"}</span></li>
           ))}
         </ul>
-        {shop.address && <p className="tiny muted">📍 {shop.address} {shop.city}</p>}
+        {shop.address && <p className="tiny muted inline-meta" style={{ marginTop: 12 }}><Icon name="pin" />{shop.address} {shop.city}</p>}
       </section>
 
-      <footer className="footer tiny muted">Online randevu: <a className="link" href="/">Berberim</a></footer>
+      <footer className="powered">
+        <a href="/"><Wordmark /></a> ile online randevu · <a href="/kvkk">KVKK</a>
+      </footer>
     </div>
   );
 }

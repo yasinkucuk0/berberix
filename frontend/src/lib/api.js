@@ -22,7 +22,7 @@ export function setToken(token) {
   }
 }
 
-export async function api(path, { method = "GET", body, auth = true } = {}) {
+export async function api(path, { method = "GET", body, auth = true, full = false } = {}) {
   const headers = { "Content-Type": "application/json" };
   const token = auth ? getToken() : null;
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -38,7 +38,7 @@ export async function api(path, { method = "GET", body, auth = true } = {}) {
     window.dispatchEvent(new Event("berberim:logout"));
   }
   if (!res.ok || data.success === false) throw new Error(data.message || "İşlem başarısız oldu.");
-  return data.data;
+  return full ? data : data.data;
 }
 
 export const money = (n) => `${Number(n || 0).toLocaleString("tr-TR")} ₺`;

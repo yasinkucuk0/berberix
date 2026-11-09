@@ -2,7 +2,8 @@ const TR = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u", Ç: "c", Ğ: 
 
 const RESERVED_SLUGS = new Set([
   "api", "admin", "yonetim", "panel", "giris", "kayit", "cikis", "assets", "static",
-  "berberim", "destek", "hakkinda", "fiyatlar", "iletisim", "sw", "manifest", "icons",
+  "berberim", "berberix", "destek", "hakkinda", "fiyatlar", "iletisim", "sw", "manifest", "icons",
+  "kvkk", "kosullar", "gizlilik", "demo", "demo-berber", "fiyat", "paketler", "r", "randevu",
 ]);
 
 class HttpError extends Error {

@@ -1,4 +1,4 @@
-// Berberim - cok kiracili (multi-tenant) berber platformu.
+// BERBERIX - cok kiracili (multi-tenant) berber platformu.
 // KURAL: Dukkana ait her tablo shopId tasir; her sorgu shopId ile filtrelenir.
 
 generator client {
@@ -26,6 +26,13 @@ model Shop {
   slotMinutes  Int      @default(30)
   status       String   @default("TRIAL") // TRIAL | ACTIVE | SUSPENDED
   plan         String   @default("BASIC")
+  isDemo       Boolean  @default(false) // satis sunumu icin demo dukkan (herkes paneli deneyebilir)
+  termsAcceptedAt DateTime? // dukkan sahibi kullanim kosullarini kabul etti
+  loyaltyEvery Int      @default(0)  // sadakat: her N. ziyaret hediye (0 = kapali)
+  // Karar motoru ayarlari (src/decisions). confirmMode: MANUAL | TRUSTED | ALL
+  confirmMode       String @default("MANUAL")
+  noShowLimit       Int    @default(3) // bu kadar "gelmedi" olan numara online randevu alamaz
+  maxActivePerPhone Int    @default(2) // ayni numaranin ileri tarihli aktif randevu siniri
   trialEndsAt  DateTime
   paidUntil    DateTime?
   createdAt    DateTime @default(now())
@@ -35,6 +42,11 @@ model Shop {
   services     Service[]
   hours        WorkingHour[]
   appointments Appointment[]
+  decisions    DecisionLog[]
+  customerNotes CustomerNote[]
+  cashEntries  CashEntry[]
+  barbers      Barber[]
+  closedDays   ClosedDay[]
 }
 
 model User {
@@ -45,6 +57,8 @@ model User {
   role         String   // PLATFORM_ADMIN | OWNER | STAFF
   shopId       Int?
   shop         Shop?    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  barberId     Int?     // STAFF: hangi berbere bagli (sadece onun randevularini gorur)
+  barber       Barber?  @relation(fields: [barberId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
 
   @@index([shopId])
@@ -75,6 +89,8 @@ model WorkingHour {
   isOpen    Boolean @default(true)
   openTime  String  @default("09:00")
   closeTime String  @default("20:00")
+  breakStart String @default("") // ogle arasi, bos = yok
+  breakEnd   String @default("")
 
   @@unique([shopId, dayOfWeek])
 }
@@ -87,15 +103,101 @@ model Appointment {
   service       Service  @relation(fields: [serviceId], references: [id])
   serviceName   String
   price         Int
+  barberId      Int?     // bos = dukkanda calisan tanimli degil (tek koltuk) ya da eski kayit
+  barber        Barber?  @relation(fields: [barberId], references: [id], onDelete: SetNull)
+  barberName    String   @default("")
   customerName  String
   customerPhone String
+  customerKey   String   @default("") // telefonun son 10 hanesi (musteri gecmisi icin)
+  // KVKK: aydinlatma metni onayi (zorunlu, online randevuda) ve kampanya mesaji acik rizasi (istege bagli)
+  kvkkAcceptedAt   DateTime?
+  marketingConsent Boolean  @default(false)
   note          String   @default("")
   date          String   // YYYY-MM-DD (dukkan yerel saati)
   startMinutes  Int      // gun icindeki dakika (09:30 = 570)
   endMinutes    Int
   status        String   @default("PENDING") // PENDING | CONFIRMED | COMPLETED | CANCELLED | NO_SHOW
+  decidedBy     String   @default("") // AUTO = karar motoru onayladi, OWNER = berber ekledi
+  manageToken   String?  @unique // musterinin randevusunu yonetme (iptal) linki
+  cancelledBy   String   @default("") // CUSTOMER = musteri linkten iptal etti
+  loyaltyReward Boolean  @default(false) // sadakat hediyesi (ucretsiz) randevu
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([shopId, date])
+  @@index([shopId, customerKey])
+}
+
+// Karar motorunun verdigi her kararin kaydi (neden boyle karar verildi?).
+// Telefon numarasi yazilmaz; subject en fazla son 4 hane icerir.
+model DecisionLog {
+  id        Int      @id @default(autoincrement())
+  shopId    Int
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  type      String   // BOOKING
+  policy    String   // politika adi + surumu, orn. booking@1
+  outcome   String   // CONFIRM | REVIEW | REJECT
+  subject   String   @default("")
+  reasons   String   @default("[]") // JSON: [{ code, outcome, message }]
+  createdAt DateTime @default(now())
+
+  @@index([shopId, createdAt])
+}
+
+// Musteri notu (CRM). Musteri listesi randevulardan turetilir; burada sadece berberin notu tutulur.
+model CustomerNote {
+  id          Int      @id @default(autoincrement())
+  shopId      Int
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customerKey String   // telefonun son 10 hanesi
+  note        String   @default("")
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shopId, customerKey])
+}
+
+// Kasa hareketi. Tamamlanan randevu otomatik gelir yazar (appointmentId dolu); digerleri elle girilir.
+model CashEntry {
+  id            Int      @id @default(autoincrement())
+  shopId        Int
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  date          String   // YYYY-MM-DD
+  type          String   // INCOME | EXPENSE
+  category      String   // Hizmet | Ürün satışı | Bahşiş | Kira | Malzeme | Fatura | Maaş | Diğer
+  amount        Int      // TL, her zaman pozitif
+  method        String   @default("CASH") // CASH | CARD | TRANSFER
+  note          String   @default("")
+  appointmentId Int?     @unique
+  createdAt     DateTime @default(now())
+
+  @@index([shopId, date])
+}
+
+// Calisan (koltuk). Her berberin kendi takvimi olur. Hic calisan yoksa dukkan tek koltuk gibi calisir.
+model Barber {
+  id           Int      @id @default(autoincrement())
+  shopId       Int
+  shop         Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name         String
+  title        String   @default("") // orn. Usta, Kalfa, Cirak
+  offDays      String   @default("") // izinli gunler: "0,6" (0 = Pazartesi ... 6 = Pazar)
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  appointments Appointment[]
+  users        User[]
+
+  @@index([shopId])
+}
+
+// Dukkanin kapali oldugu ozel gunler (bayram, tatil, cenaze...). O gun online randevu alinmaz.
+model ClosedDay {
+  id     Int    @id @default(autoincrement())
+  shopId Int
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  date   String // YYYY-MM-DD
+  reason String @default("")
+
+  @@unique([shopId, date])
 }

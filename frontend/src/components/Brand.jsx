@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth.jsx";
+import Icon from "./Icon.jsx";
 
 const PRESETS = [
   ["#c9a24b", "#111111"], ["#b5272d", "#14110f"], ["#2f6fdd", "#0d1b2a"],
@@ -69,7 +70,7 @@ export default function Brand() {
       <h3>Markan</h3>
 
       <div className="brand-preview" style={{ background: form.accentColor, borderColor: form.primaryColor }}>
-        {form.logo ? <img src={form.logo} alt="logo" /> : <span className="logo-fallback big">✂</span>}
+        {form.logo ? <img src={form.logo} alt="logo" /> : <span className="logo-fallback big" style={{ width: 56, height: 56, borderRadius: 14 }}><Icon name="scissors" /></span>}
         <strong style={{ color: form.primaryColor }}>{form.name || "Dükkan adı"}</strong>
       </div>
 

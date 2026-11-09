@@ -3,3 +3,7 @@ node_modules/
 *.db
 *.db-journal
 dist/
+**/prisma/postgres/
+
+# Claude onizleme gorselleri (koda ait degil)
+Claude outputs/

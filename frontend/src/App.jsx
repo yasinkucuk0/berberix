@@ -5,6 +5,8 @@ import Login from "./pages/Login.jsx";
 import Panel from "./pages/Panel.jsx";
 import Admin from "./pages/Admin.jsx";
 import ShopPage from "./pages/ShopPage.jsx";
+import Legal from "./pages/Legal.jsx";
+import ManageAppointment from "./pages/ManageAppointment.jsx";
 import { useAuth } from "./lib/auth.jsx";
 
 function RequireShop({ children }) {
@@ -23,6 +25,9 @@ export default function App() {
       <Route path="/giris" element={<Login />} />
       <Route path="/panel/*" element={<RequireShop><Panel /></RequireShop>} />
       <Route path="/yonetim" element={<Admin />} />
+      <Route path="/r/:token" element={<ManageAppointment />} />
+      <Route path="/kvkk" element={<Legal />} />
+      <Route path="/kosullar" element={<Legal />} />
       <Route path="/:slug" element={<ShopPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

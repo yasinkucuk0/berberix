@@ -47,6 +47,19 @@ function requireShop(req, res, next) {
   next();
 }
 
+// Sadece dukkan sahibi (kasa, musteriler, asistan, ayarlar). Calisan (STAFF) giremez.
+function requireOwner(req, res, next) {
+  if (!req.user || req.user.role !== "OWNER") return next(new HttpError(403, "Bu bölüm sadece dükkan sahibine açık."));
+  next();
+}
+
+// Calisan girisi: sadece kendi berberinin randevulari. Sahip icin null doner.
+function staffBarberId(req) {
+  if (req.user.role !== "STAFF") return null;
+  if (!req.user.barberId) throw new HttpError(403, "Hesabın bir berbere bağlı değil. Dükkan sahibine sor.");
+  return req.user.barberId;
+}
+
 // Basit bellek ici hiz siniri (giris / kayit / randevu icin)
 function rateLimit({ windowMs, max, message }) {
   const hits = new Map();
@@ -62,4 +75,6 @@ function rateLimit({ windowMs, max, message }) {
   };
 }
 
-module.exports = { signToken, requireAuth, requireRole, requireShop, rateLimit };
+module.exports = {
+  signToken, requireAuth, requireRole, requireShop, requireOwner, staffBarberId, rateLimit,
+};
